@@ -48,10 +48,11 @@
 
         try {
             const response = await fetch('https://www.espressoart.co.il/smartbee-proxy.php', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ amount: amount, payType: payType })
-            });
+    method: 'POST',
+    mode: 'cors', // הוסף את השורה הזו
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ amount: amount, payType: payType })
+});
 
             // בדיקה אם השרת בכלל החזיר תשובה תקינה
             if (!response.ok) {
