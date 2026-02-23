@@ -1,5 +1,4 @@
 export default async function handler(req, res) {
-    // הגדרות CORS
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
@@ -11,14 +10,16 @@ export default async function handler(req, res) {
         
         const clientId = "b6116aee-37c0-4931-81f9-e153db4cc7e9";
         const password = "QG90Dz9xcBjFWaU4U0kj";
-        const token = "459e7c93-2e05-402a-87ab-0d94b4cef027";
+        // שימוש בטוקן שסיפקת כ-ProviderUserToken
+        const providerUserToken = "459e7c93-2e05-402a-87ab-0d94b4cef027";
 
+        // יצירת גוף הבקשה לפי ה-Schema ב-Swagger
         const payload = {
-            "documentType": 320,
-            "isTaxIncluded": true,
+            "documentType": 320, // חשבונית מס קבלה
             "customerName": "לקוח כללי",
+            "isTaxIncluded": true,
             "clientId": clientId,
-            "providerUserToken": token,
+            "providerUserToken": providerUserToken,
             "items": [{
                 "description": "מכירה כללית",
                 "unitPrice": Number(amount),
@@ -31,38 +32,34 @@ export default async function handler(req, res) {
             }]
         };
 
+        // בניית ה-Authorization Header כפי שמופיע ב-Authorize של Swagger
         const authString = Buffer.from(`${clientId}:${password}`).toString('base64');
 
-        // שינוי קטן בכתובת: הוספת / בסוף ושימוש ב-https תקין
-        const smartbeeUrl = 'https://test.smartbee.co.il/api/v1/Documents/create';
-
-        const smartbeeResponse = await fetch(smartbeeUrl, {
+        const response = await fetch('https://test.smartbee.co.il/api/v1/Documents/create', {
             method: 'POST',
             headers: { 
-                'Accept': 'application/json',
                 'Content-Type': 'application/json',
+                'Accept': 'application/json',
                 'Authorization': `Basic ${authString}`
             },
             body: JSON.stringify(payload)
         });
 
-        const status = smartbeeResponse.status;
-        const contentType = smartbeeResponse.headers.get("content-type");
+        const result = await response.json();
 
-        if (contentType && contentType.includes("application/json")) {
-            const result = await smartbeeResponse.json();
-            return res.status(status).json(result);
-        } else {
-            // אם קיבלנו HTML, ננסה להבין מה כתוב שם (למשל "401 Unauthorized")
-            const htmlError = await smartbeeResponse.text();
-            return res.status(status).json({ 
-                isSuccess: false, 
-                message: `Server returned status ${status}`,
-                details: htmlError.substring(0, 200) // לוקח רק את ההתחלה של השגיאה
+        // ב-Swagger מופיע שכל תשובה נעטפת ב-APIResponse
+        // נבדוק אם השרת החזיר שגיאת אימות פנימית
+        if (response.status === 401 || !result.isSuccess) {
+            return res.status(response.status).json({
+                isSuccess: false,
+                message: result.message || "שגיאת אימות מול סמארטבי",
+                details: result.errors || "בדוק את ה-ClientId וה-Password"
             });
         }
 
+        return res.status(200).json(result);
+
     } catch (error) {
-        return res.status(500).json({ isSuccess: false, message: "Server Exception", error: error.message });
+        return res.status(500).json({ isSuccess: false, message: "Server Error", error: error.message });
     }
 }
