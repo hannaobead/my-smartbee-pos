@@ -46,11 +46,12 @@
             if (!amt) return;
             status.innerText = "מעבד...";
             try {
-                const res = await fetch('/api/create', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ amount: parseFloat(amt), payType: type })
-                });
+                // בתוך פונקציית processInvoice
+const res = await fetch('/api/create', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ amount: parseFloat(amt), payType: type })
+});
                 const result = await res.json();
                 if (result.isSuccess) {
                     window.open(result.documentUrl, '_blank');
