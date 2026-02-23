@@ -5,20 +5,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>קופה חכמה - Espresso Art</title>
     <style>
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; text-align: center; background: #f8f9fa; padding: 40px; color: #333; }
+        body { font-family: 'Segoe UI', Arial, sans-serif; text-align: center; background: #f8f9fa; padding: 40px; }
         .card { background: white; padding: 40px; border-radius: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); display: inline-block; width: 100%; max-width: 400px; }
-        h1 { color: #4a332d; margin-bottom: 25px; }
-        input { font-size: 32px; padding: 15px; width: 80%; text-align: center; border: 2px solid #eaeaea; border-radius: 12px; margin-bottom: 20px; outline: none; transition: border-color 0.3s; }
-        input:focus { border-color: #d4a373; }
+        h1 { color: #4a332d; }
+        input { font-size: 32px; padding: 15px; width: 80%; text-align: center; border: 2px solid #eaeaea; border-radius: 12px; margin-bottom: 20px; }
         .buttons { display: flex; gap: 15px; justify-content: center; }
-        button { flex: 1; font-size: 20px; padding: 20px; cursor: pointer; border: none; border-radius: 12px; color: white; transition: transform 0.2s, opacity 0.2s; font-weight: bold; }
+        button { flex: 1; font-size: 20px; padding: 20px; cursor: pointer; border: none; border-radius: 12px; color: white; font-weight: bold; }
         .btn-cash { background: #588157; }
         .btn-credit { background: #3a5a40; }
-        button:active { transform: scale(0.95); }
-        button:hover { opacity: 0.9; }
-        #status { margin-top: 25px; font-size: 18px; min-height: 24px; }
-        .loader { border: 3px solid #f3f3f3; border-top: 3px solid #3498db; border-radius: 50%; width: 20px; height: 20px; animation: spin 2s linear infinite; display: inline-block; vertical-align: middle; margin-left: 10px; }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        #status { margin-top: 25px; font-size: 18px; }
     </style>
 </head>
 <body>
@@ -26,18 +21,19 @@
 <div class="card">
     <h1>Espresso Art</h1>
     <p>הכנס סכום לתשלום:</p>
-    <input type="number" id="amount" placeholder="0.00" step="0.1" inputmode="decimal" />
+    <input type="number" id="amount" placeholder="0.00" step="0.1" />
     
     <div class="buttons">
-        <button class="btn-cash" onclick="processInvoice(1)">מזומן</button>
-        <button class="btn-credit" onclick="processInvoice(3)">אשראי</button>
+        <button type="button" class="btn-cash" onclick="processInvoice(1)">מזומן</button>
+        <button type="button" class="btn-credit" onclick="processInvoice(3)">אשראי</button>
     </div>
     
     <div id="status"></div>
 </div>
 
 <script>
-    async function processInvoice(payType) {
+    // הגדרת הפונקציה בצורה מפורשת על החלון כדי למנוע שגיאות ReferenceError
+    window.processInvoice = async function(payType) {
         const amountField = document.getElementById('amount');
         const statusDiv = document.getElementById('status');
         const amount = amountField.value;
@@ -47,34 +43,43 @@
             return;
         }
 
-        statusDiv.innerHTML = '<div class="loader"></div> שולח בקשה לסמארטבי...';
+        statusDiv.innerText = '⏳ שולח בקשה לשרת Upress...';
         statusDiv.style.color = '#555';
 
         try {
-            // פנייה ישירה לשרת ה-Upress שלך
             const response = await fetch('https://www.espressoart.co.il/smartbee-proxy.php', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ amount, payType })
+                body: JSON.stringify({ amount: amount, payType: payType })
             });
+
+            // בדיקה אם השרת בכלל החזיר תשובה תקינה
+            if (!response.ok) {
+                throw new Error('שרת Upress החזיר שגיאה ' + response.status);
+            }
 
             const result = await response.json();
 
             if (result.isSuccess) {
                 statusDiv.innerText = '✅ המסמך הופק בהצלחה!';
                 statusDiv.style.color = 'green';
-                amountField.value = ''; // ניקוי שדה הסכום
+                amountField.value = ''; 
                 
-                // פתיחת החשבונית בלשונית חדשה
                 if (result.documentUrl) {
                     window.open(result.documentUrl, '_blank');
                 }
             } else {
-                statusDiv.innerText = '❌ שגיאה: ' + (result.message || 'לא ניתן להפיק מסמך');
+                statusDiv.innerText = '❌ שגיאה: ' + (result.message || 'פרטים ב-Console');
                 statusDiv.style.color = 'red';
-                console.error('SmartBee Error:', result);
+                console.log('SmartBee Result:', result);
             }
         } catch (error) {
-            statusDiv.innerText = '❌ שגיאת תקשורת מול שרת Upress';
+            statusDiv.innerText = '❌ שגיאת תקשורת: ' + error.message;
             statusDiv.style.color = 'red';
-            console.error('Fetch Error:', error
+            console.error('Fetch Error:', error);
+        }
+    };
+</script>
+
+</body>
+</html>
