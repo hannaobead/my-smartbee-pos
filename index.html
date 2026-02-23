@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SmartBee POS</title>
+    <style>
+        :root { --primary: #27ae60; --dark: #2c3e50; }
+        body { font-family: sans-serif; background: #f0f2f5; display: flex; flex-direction: column; align-items: center; padding: 20px; }
+        .pos-container { background: white; padding: 20px; border-radius: 15px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); width: 320px; }
+        #display { width: 100%; height: 80px; background: var(--dark); color: #00ff00; font-family: monospace; font-size: 40px; text-align: right; border-radius: 8px; margin-bottom: 20px; padding: 10px; box-sizing: border-box; display: flex; align-items: center; justify-content: flex-end; }
+        .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+        button { height: 70px; font-size: 24px; border: 1px solid #ddd; border-radius: 10px; background: white; cursor: pointer; }
+        .payment-section { margin-top: 20px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        .btn-pay { height: 80px; color: white; font-weight: bold; border: none; border-radius: 10px; cursor: pointer; }
+        .cash { background: var(--primary); }
+        .credit { background: #2980b9; }
+    </style>
+</head>
+<body>
+    <div class="pos-container">
+        <div id="display">0</div>
+        <div class="grid">
+            <button onclick="press('1')">1</button><button onclick="press('2')">2</button><button onclick="press('3')">3</button>
+            <button onclick="press('4')">4</button><button onclick="press('5')">5</button><button onclick="press('6')">6</button>
+            <button onclick="press('7')">7</button><button onclick="press('8')">8</button><button onclick="press('9')">9</button>
+            <button onclick="press('.')">.</button><button onclick="press('0')">0</button>
+            <button style="background:#e74c3c; color:white;" onclick="clearDisplay()">C</button>
+        </div>
+        <div class="payment-section">
+            <button class="btn-pay cash" onclick="processInvoice(1)">מזומן</button>
+            <button class="btn-pay credit" onclick="processInvoice(3)">אשראי</button>
+        </div>
+        <div id="status" style="text-align:center; margin-top:10px; font-size:12px;">מוכן</div>
+    </div>
+
+    <script>
+        let amt = "";
+        const display = document.getElementById('display');
+        const status = document.getElementById('status');
+
+        function press(n) { amt += n; display.innerText = amt; }
+        function clearDisplay() { amt = ""; display.innerText = "0"; }
+
+        async function processInvoice(type) {
+            if (!amt) return;
+            status.innerText = "מעבד...";
+            try {
+                const res = await fetch('/api/create', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ amount: parseFloat(amt), payType: type })
+                });
+                const result = await res.json();
+                if (result.isSuccess) {
+                    window.open(result.documentUrl, '_blank');
+                    clearDisplay();
+                    status.innerText = "בוצע!";
+                } else { status.innerText = "שגיאה: " + result.message; }
+            } catch (e) { status.innerText = "שגיאת שרת"; }
+        }
+    </script>
+</body>
+</html>
