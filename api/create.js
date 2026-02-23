@@ -1,4 +1,5 @@
 export default async function handler(req, res) {
+    // הגדרות CORS
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
@@ -8,10 +9,9 @@ export default async function handler(req, res) {
     try {
         const { amount, payType } = req.body;
         
-        // הגדרת המשתנים בצורה נקייה
-        const clientId = "b6116aee-37c0-4931-81f9-e153db4cc7e9".trim();
-        const password = "QG90Dz9xcBjFWaU4U0kj".trim();
-        const token = "459e7c93-2e05-402a-87ab-0d94b4cef027".trim();
+        const clientId = "b6116aee-37c0-4931-81f9-e153db4cc7e9";
+        const password = "QG90Dz9xcBjFWaU4U0kj";
+        const token = "459e7c93-2e05-402a-87ab-0d94b4cef027";
 
         const payload = {
             "documentType": 320,
@@ -31,9 +31,7 @@ export default async function handler(req, res) {
             }]
         };
 
-        // יצירת ה-Header בצורה מפורשת
-        const credentials = `${clientId}:${password}`;
-        const authHeader = `Basic ${Buffer.from(credentials).toString('base64')}`;
+        const authHeader = `Basic ${Buffer.from(`${clientId}:${password}`).toString('base64')}`;
 
         const response = await fetch('https://test.smartbee.co.il/api/v1/Documents/create', {
             method: 'POST',
@@ -45,12 +43,29 @@ export default async function handler(req, res) {
             body: JSON.stringify(payload)
         });
 
-        const data = await response.json();
+        // בדיקה אם חזר JSON או טקסט אחר
+        const contentType = response.headers.get("content-type");
+        let result;
+        
+        if (contentType && contentType.includes("application/json")) {
+            result = await response.json();
+        } else {
+            const rawText = await response.text();
+            return res.status(response.status).json({
+                isSuccess: false,
+                message: "SmartBee returned non-JSON response",
+                status: response.status,
+                raw: rawText.substring(0, 200)
+            });
+        }
 
-        // אם עדיין יש שגיאת אימות, נחזיר את הפירוט המלא מסמארטבי
-        return res.status(response.status).json(data);
+        return res.status(response.status).json(result);
 
     } catch (error) {
-        return res.status(500).json({ isSuccess: false, message: error.message });
+        return res.status(500).json({ 
+            isSuccess: false, 
+            message: "Internal Server Error", 
+            error: error.message 
+        });
     }
 }
