@@ -1,17 +1,14 @@
 export default async function handler(req, res) {
-    // הגדרות CORS כדי שהדפדפן לא יחסום את התשובה
+    // הגדרות CORS
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 
-    if (req.method === 'OPTIONS') {
-        return res.status(200).end();
-    }
+    if (req.method === 'OPTIONS') return res.status(200).end();
 
     try {
         const { amount, payType } = req.body;
         
-        // פרטי התחברות
         const clientId = "b6116aee-37c0-4931-81f9-e153db4cc7e9";
         const password = "QG90Dz9xcBjFWaU4U0kj";
         const token = "459e7c93-2e05-402a-87ab-0d94b4cef027";
@@ -26,7 +23,6 @@ export default async function handler(req, res) {
             "payments": [{ "paymentType": Number(payType), "amount": Number(amount), "date": new Date().toISOString().split('T')[0] }]
         };
 
-        // יצירת ה-Auth Header
         const authString = Buffer.from(`${clientId}:${password}`).toString('base64');
 
         const smartbeeResponse = await fetch('https://test.smartbee.co.il/api/v1/Documents/create', {
@@ -38,13 +34,17 @@ export default async function handler(req, res) {
             body: JSON.stringify(payload)
         });
 
-        const result = await smartbeeResponse.json();
-        
-        // שליחת התוצאה חזרה למחשבון שלך
-        return res.status(200).json(result);
+        // בדיקה אם התגובה היא בכלל JSON
+        const contentType = smartbeeResponse.headers.get("content-type");
+        if (contentType && contentType.indexOf("application/json") !== -1) {
+            const result = await smartbeeResponse.json();
+            return res.status(200).json(result);
+        } else {
+            const textError = await smartbeeResponse.text();
+            return res.status(500).json({ isSuccess: false, message: "SmartBee returned non-JSON", details: textError });
+        }
 
     } catch (error) {
-        console.error("Server Error:", error);
-        return res.status(500).json({ isSuccess: false, message: error.message });
+        return res.status(500).json({ isSuccess: false, message: "Internal Exception", error: error.message });
     }
 }
