@@ -1,5 +1,5 @@
 export default async function handler(req, res) {
-    // הגדרות CORS
+    // הגדרות CORS בסיסיות
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
@@ -9,10 +9,12 @@ export default async function handler(req, res) {
     try {
         const { amount, payType } = req.body;
         
+        // פרטי זיהוי (ללא רווחים)
         const clientId = "b6116aee-37c0-4931-81f9-e153db4cc7e9";
         const password = "QG90Dz9xcBjFWaU4U0kj";
         const token = "459e7c93-2e05-402a-87ab-0d94b4cef027";
 
+        // מבנה הנתונים לפי Swagger
         const payload = {
             "documentType": 320,
             "customerName": "לקוח כללי",
@@ -33,38 +35,34 @@ export default async function handler(req, res) {
 
         const authHeader = `Basic ${Buffer.from(`${clientId}:${password}`).toString('base64')}`;
 
+        // שליחה לשרת האמיתי (Production)
         const response = await fetch('https://online.smartbee.co.il/api/v1/Documents/create', {
             method: 'POST',
             headers: { 
                 'Content-Type': 'application/json',
-                'Accept': 'application/json',
                 'Authorization': authHeader
             },
             body: JSON.stringify(payload)
         });
 
-        // בדיקה אם חזר JSON או טקסט אחר
-        const contentType = response.headers.get("content-type");
-        let result;
+        // קבלת התשובה כטקסט קודם כל כדי למנוע קריסה של JSON.parse
+        const responseText = await response.text();
         
-        if (contentType && contentType.includes("application/json")) {
-            result = await response.json();
-        } else {
-            const rawText = await response.text();
+        try {
+            const data = JSON.parse(responseText);
+            return res.status(response.status).json(data);
+        } catch (e) {
             return res.status(response.status).json({
                 isSuccess: false,
-                message: "SmartBee returned non-JSON response",
-                status: response.status,
-                raw: rawText.substring(0, 200)
+                message: "Raw response from SmartBee",
+                raw: responseText.substring(0, 500)
             });
         }
-
-        return res.status(response.status).json(result);
 
     } catch (error) {
         return res.status(500).json({ 
             isSuccess: false, 
-            message: "Internal Server Error", 
+            message: "Proxy Error", 
             error: error.message 
         });
     }
