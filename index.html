@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Espresso Art POS</title>
     <style>
-        /* עיצוב הקופה - נשאר דומה */
+        /* עיצוב למסך בלבד */
         body { background: #111; color: #fff; font-family: sans-serif; display: flex; flex-direction: column; align-items: center; padding: 20px; margin: 0; }
         .card { background: #1a1a1a; padding: 20px; border-radius: 20px; width: 100%; max-width: 350px; border: 1px solid #333; }
         #display { width: 100%; font-size: 45px; padding: 10px; background: #000; border: 1px solid #22c55e; color: #22c55e; text-align: center; border-radius: 10px; margin-bottom: 15px; box-sizing: border-box; }
@@ -13,24 +13,33 @@
         button { padding: 20px; font-size: 22px; border-radius: 10px; border: none; cursor: pointer; background: #252525; color: #fff; }
         .pay { grid-column: span 3; background: #22c55e; color: #000; font-weight: bold; }
         
-        /* עיצוב לקבלה התרמית - מוסתר במסך, מופיע בהדפסה */
+        /* עיצוב לקבלה התרמית - מוסתר במסך */
         #thermal-receipt { 
             display: none; 
             width: 80mm; 
             background: #fff; 
             color: #000; 
-            padding: 10px; 
-            font-family: 'Courier New', Courier, monospace; 
+            padding: 5mm;
+            box-sizing: border-box;
         }
 
+        /* הגדרות הדפסה */
         @media print {
-            body * { display: none !important; } /* מסתיר הכל */
-            #thermal-receipt { display: block !important; margin: 0; padding: 0; } /* מציג רק קבלה */
+            @page { margin: 0; }
+            body { background: #fff; padding: 0; margin: 0; }
+            .card { display: none !important; } /* מסתיר את הקופה */
+            #thermal-receipt { 
+                display: block !important; 
+                position: absolute;
+                top: 0;
+                right: 0;
+                width: 100%; /* מתאים לרוחב המדפסת */
+            }
         }
 
         .receipt-center { text-align: center; }
         .receipt-line { border-bottom: 1px dashed #000; margin: 5px 0; }
-        .receipt-flex { display: flex; justify-content: space-between; }
+        .receipt-flex { display: flex; justify-content: space-between; margin: 2px 0; }
     </style>
 </head>
 <body>
@@ -43,44 +52,50 @@
             <button onclick="num('4')">4</button><button onclick="num('5')">5</button><button onclick="num('6')">6</button>
             <button onclick="num('1')">1</button><button onclick="num('2')">2</button><button onclick="num('3')">3</button>
             <button onclick="num('.')">.</button><button onclick="num('0')">0</button><button style="color:red" onclick="clr()">C</button>
-            <button class="pay" onclick="pay(1)">הדפס חשבונית (מזומן)</button>
+            <button class="pay" onclick="pay(1)">הפק והדפס (מזומן)</button>
         </div>
-        <div id="status" style="margin-top: 15px; text-align: center;"></div>
+        <div id="status" style="margin-top: 15px; text-align: center; font-size: 14px;"></div>
     </div>
 
     <div id="thermal-receipt">
         <div class="receipt-center">
             <h2 style="margin:0">Espresso Art</h2>
-            <p>ח.פ/ע.מ: 000000000<br>כתובת העסק, עיר</p>
+            <p style="margin: 5px 0;">עוסק מורשה: 000000000</p>
         </div>
         <div class="receipt-line"></div>
         <div class="receipt-center">
             <b id="r-type">חשבונית מס קבלה</b><br>
-            מספר מסמך: <span id="r-id"></span>
+            מקור<br>
+            מספר: <span id="r-id"></span>
         </div>
         <div class="receipt-line"></div>
         <p>תאריך: <span id="r-date"></span></p>
         <div class="receipt-flex">
-            <span>מכירה כללית</span>
+            <span>מכירה כללית (כולל מע"מ)</span>
             <span id="r-amount"></span>
         </div>
         <div class="receipt-line"></div>
         <div class="receipt-flex" style="font-size: 1.2em; font-weight: bold;">
-            <span>סה"כ:</span>
+            <span>סה"כ לתשלום:</span>
             <span id="r-total"></span>
         </div>
         <div class="receipt-line"></div>
-        <p class="receipt-center">תודה שקניתם אצלנו!</p>
+        <p class="receipt-center" style="font-size: 0.9em;">תודה שקניתם באספרסו ארט!</p>
     </div>
 
     <script>
         let s = '';
-        function num(n) { s += n; document.getElementById('display').value = s; }
-        function clr() { s = ''; document.getElementById('display').value = ''; }
+        const display = document.getElementById('display');
+        const status = document.getElementById('status');
+
+        function num(n) { s += n; display.value = s; }
+        function clr() { s = ''; display.value = ''; status.innerHTML = ''; }
 
         async function pay(type) {
-            const status = document.getElementById('status');
-            status.innerText = 'מעבד...';
+            if (!s || parseFloat(s) <= 0) return alert('נא להזין סכום');
+            
+            status.style.color = '#aaa';
+            status.innerText = 'מפיק חשבונית...';
             
             try {
                 const r = await fetch('/api/create', {
@@ -94,20 +109,22 @@
                     // מילוי נתוני הקבלה
                     document.getElementById('r-id').innerText = data.result.index || data.result;
                     document.getElementById('r-date').innerText = new Date().toLocaleString('he-IL');
-                    document.getElementById('r-amount').innerText = s + ' ₪';
-                    document.getElementById('r-total').innerText = s + ' ₪';
+                    document.getElementById('r-amount').innerText = parseFloat(s).toFixed(2) + ' ₪';
+                    document.getElementById('r-total').innerText = parseFloat(s).toFixed(2) + ' ₪';
 
-                    status.innerHTML = '<b style="color:#22c55e">הצלחנו! מדפיס...</b>';
+                    status.innerHTML = '<b style="color:#22c55e">הצלחה! שולח להדפסה...</b>';
                     
-                    // פקודת הדפסה
+                    // השהייה קטנה כדי לוודא שה-DOM התעדכן לפני ההדפסה
                     setTimeout(() => {
                         window.print();
                         clr();
-                    }, 500);
+                    }, 800);
                 } else {
-                    status.innerText = 'שגיאה: ' + JSON.stringify(data);
+                    status.style.color = 'red';
+                    status.innerText = 'שגיאה: ' + (data.message || 'תקלה בשרת');
                 }
             } catch (e) {
+                status.style.color = 'red';
                 status.innerText = 'תקלה בתקשורת';
             }
         }
