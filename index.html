@@ -2,43 +2,86 @@
 <html lang="he" dir="rtl">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Espresso Art POS</title>
     <style>
-        body { background: #111; color: #fff; font-family: system-ui, sans-serif; display: flex; justify-content: center; padding: 15px; margin: 0; }
-        .card { background: #1a1a1a; padding: 20px; border-radius: 20px; width: 100%; max-width: 380px; border: 1px solid #333; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
-        h2 { text-align: center; color: #22c55e; margin: 0 0 15px 0; }
-        #display { width: 100%; font-size: 50px; padding: 15px; background: #000; border: 2px solid #333; color: #22c55e; text-align: center; border-radius: 12px; margin-bottom: 20px; box-sizing: border-box; outline: none; }
-        .numpad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
-        button { padding: 20px; font-size: 26px; border-radius: 12px; border: none; cursor: pointer; }
-        .nk { background: #252525; color: #fff; }
-        .pay { grid-column: span 3; font-weight: bold; margin-top: 10px; font-size: 20px; background: #22c55e; color: #000; }
-        #status { margin-top: 15px; text-align: center; min-height: 50px; }
-        .pdf-btn { display: block; margin-top: 15px; padding: 15px; background: #e74c3c; color: white; text-decoration: none; border-radius: 10px; font-weight: bold; }
+        /* עיצוב הקופה - נשאר דומה */
+        body { background: #111; color: #fff; font-family: sans-serif; display: flex; flex-direction: column; align-items: center; padding: 20px; margin: 0; }
+        .card { background: #1a1a1a; padding: 20px; border-radius: 20px; width: 100%; max-width: 350px; border: 1px solid #333; }
+        #display { width: 100%; font-size: 45px; padding: 10px; background: #000; border: 1px solid #22c55e; color: #22c55e; text-align: center; border-radius: 10px; margin-bottom: 15px; box-sizing: border-box; }
+        .numpad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+        button { padding: 20px; font-size: 22px; border-radius: 10px; border: none; cursor: pointer; background: #252525; color: #fff; }
+        .pay { grid-column: span 3; background: #22c55e; color: #000; font-weight: bold; }
+        
+        /* עיצוב לקבלה התרמית - מוסתר במסך, מופיע בהדפסה */
+        #thermal-receipt { 
+            display: none; 
+            width: 80mm; 
+            background: #fff; 
+            color: #000; 
+            padding: 10px; 
+            font-family: 'Courier New', Courier, monospace; 
+        }
+
+        @media print {
+            body * { display: none !important; } /* מסתיר הכל */
+            #thermal-receipt { display: block !important; margin: 0; padding: 0; } /* מציג רק קבלה */
+        }
+
+        .receipt-center { text-align: center; }
+        .receipt-line { border-bottom: 1px dashed #000; margin: 5px 0; }
+        .receipt-flex { display: flex; justify-content: space-between; }
     </style>
 </head>
 <body>
+
     <div class="card">
-        <h2>Espresso Art</h2>
+        <h2 style="text-align: center; color: #22c55e;">Espresso Art</h2>
         <input id="display" readonly placeholder="0.00">
         <div class="numpad">
-            <button class="nk" onclick="num('7')">7</button><button class="nk" onclick="num('8')">8</button><button class="nk" onclick="num('9')">9</button>
-            <button class="nk" onclick="num('4')">4</button><button class="nk" onclick="num('5')">5</button><button class="nk" onclick="num('6')">6</button>
-            <button class="nk" onclick="num('1')">1</button><button class="nk" onclick="num('2')">2</button><button class="nk" onclick="num('3')">3</button>
-            <button class="nk" onclick="num('.')">.</button><button class="nk" onclick="num('0')">0</button><button class="nk" onclick="clr()">C</button>
-            <button class="pay" onclick="pay(1)">הפק חשבונית (מזומן)</button>
+            <button onclick="num('7')">7</button><button onclick="num('8')">8</button><button onclick="num('9')">9</button>
+            <button onclick="num('4')">4</button><button onclick="num('5')">5</button><button onclick="num('6')">6</button>
+            <button onclick="num('1')">1</button><button onclick="num('2')">2</button><button onclick="num('3')">3</button>
+            <button onclick="num('.')">.</button><button onclick="num('0')">0</button><button style="color:red" onclick="clr()">C</button>
+            <button class="pay" onclick="pay(1)">הדפס חשבונית (מזומן)</button>
         </div>
-        <div id="status"></div>
+        <div id="status" style="margin-top: 15px; text-align: center;"></div>
+    </div>
+
+    <div id="thermal-receipt">
+        <div class="receipt-center">
+            <h2 style="margin:0">Espresso Art</h2>
+            <p>ח.פ/ע.מ: 000000000<br>כתובת העסק, עיר</p>
+        </div>
+        <div class="receipt-line"></div>
+        <div class="receipt-center">
+            <b id="r-type">חשבונית מס קבלה</b><br>
+            מספר מסמך: <span id="r-id"></span>
+        </div>
+        <div class="receipt-line"></div>
+        <p>תאריך: <span id="r-date"></span></p>
+        <div class="receipt-flex">
+            <span>מכירה כללית</span>
+            <span id="r-amount"></span>
+        </div>
+        <div class="receipt-line"></div>
+        <div class="receipt-flex" style="font-size: 1.2em; font-weight: bold;">
+            <span>סה"כ:</span>
+            <span id="r-total"></span>
+        </div>
+        <div class="receipt-line"></div>
+        <p class="receipt-center">תודה שקניתם אצלנו!</p>
     </div>
 
     <script>
         let s = '';
         function num(n) { s += n; document.getElementById('display').value = s; }
-        function clr() { s = ''; document.getElementById('display').value = ''; document.getElementById('status').innerHTML = ''; }
+        function clr() { s = ''; document.getElementById('display').value = ''; }
 
         async function pay(type) {
             const status = document.getElementById('status');
             status.innerText = 'מעבד...';
+            
             try {
                 const r = await fetch('/api/create', {
                     method: 'POST',
@@ -46,10 +89,21 @@
                     body: JSON.stringify({ amount: s, payType: type })
                 });
                 const data = await r.json();
+
                 if (data.resultCodeId === 101 || data.resultCodeId === 102) {
-                    let pdf = (data.result && data.result.linkToOriginal) ? data.result.linkToOriginal : (data.pdfUrl || "");
-                    status.innerHTML = `<b style="color:#22c55e">הצלחנו!</b><br><a href="${pdf}" target="_blank" class="pdf-btn">📄 פתח חשבונית PDF</a>`;
-                    s = ''; document.getElementById('display').value = '';
+                    // מילוי נתוני הקבלה
+                    document.getElementById('r-id').innerText = data.result.index || data.result;
+                    document.getElementById('r-date').innerText = new Date().toLocaleString('he-IL');
+                    document.getElementById('r-amount').innerText = s + ' ₪';
+                    document.getElementById('r-total').innerText = s + ' ₪';
+
+                    status.innerHTML = '<b style="color:#22c55e">הצלחנו! מדפיס...</b>';
+                    
+                    // פקודת הדפסה
+                    setTimeout(() => {
+                        window.print();
+                        clr();
+                    }, 500);
                 } else {
                     status.innerText = 'שגיאה: ' + JSON.stringify(data);
                 }
