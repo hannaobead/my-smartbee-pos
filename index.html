@@ -28,6 +28,9 @@
             line-height: 1.35;
             font-weight: 400;
             letter-spacing: 0;
+            overflow: hidden;
+            overflow-wrap: anywhere;
+            word-break: break-word;
         }
 
         /* הגדרות הדפסה */
@@ -37,7 +40,7 @@
                 margin: 0;
             }
             html, body {
-                width: 58mm;
+                width: 48mm;
                 margin: 0;
                 padding: 0;
                 background: #fff !important;
@@ -67,9 +70,10 @@
                 text-align: right;
             }
             .receipt-flex span:last-child {
-                text-align: left;
+                text-align: right;
                 direction: ltr;
                 unicode-bidi: plaintext;
+                max-width: 100%;
             }
         }
         .receipt-center { text-align: center; font-weight: 400; }
