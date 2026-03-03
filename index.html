@@ -45,7 +45,7 @@
 <body>
 
     <div class="card">
-        <h2 style="text-align: center; color: #22c55e;">Espresso Art</h2>
+        <h2 style="text-align: center; color: #22c55e;">Momento Pos</h2>
         <input id="display" readonly placeholder="0.00">
         <div class="numpad">
             <button onclick="num('7')">7</button><button onclick="num('8')">8</button><button onclick="num('9')">9</button>
@@ -83,49 +83,75 @@
         <p class="receipt-center" style="font-size: 0.9em;">תודה שקניתם באספרסו ארט!</p>
     </div>
 
-    <script>
+        <script>
         let s = '';
         const display = document.getElementById('display');
         const status = document.getElementById('status');
 
-        function num(n) { s += n; display.value = s; }
-        function clr() { s = ''; display.value = ''; status.innerHTML = ''; }
+        function num(n) {
+            if (n === '.' && s.includes('.')) return;
+            if (n === '.' && s === '') {
+                s = '0.';
+                display.value = s;
+                return;
+            }
+            if (s.includes('.')) {
+                const decimals = s.split('.')[1];
+                if (decimals.length >= 2) return;
+            }
+            s += n;
+            display.value = s;
+        }
+
+        function clr() {
+            s = '';
+            display.value = '';
+            status.innerHTML = '';
+        }
+
+        function parseAmount(value) {
+            if (!/^\d+(\.\d{1,2})?$/.test(value)) return null;
+            const parsed = Number(value);
+            return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+        }
 
         async function pay(type) {
-            if (!s || parseFloat(s) <= 0) return alert('נא להזין סכום');
-            
+            const amount = parseAmount(s);
+            if (!amount) {
+                alert('Please enter a valid amount');
+                return;
+            }
+
             status.style.color = '#aaa';
-            status.innerText = 'מפיק חשבונית...';
-            
+            status.innerText = 'Creating invoice...';
+
             try {
                 const r = await fetch('/api/create', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ amount: s, payType: type })
+                    body: JSON.stringify({ amount: amount.toFixed(2), payType: type })
                 });
                 const data = await r.json();
 
-                if (data.resultCodeId === 101 || data.resultCodeId === 102) {
-                    // מילוי נתוני הקבלה
-                    document.getElementById('r-id').innerText = data.result.index || data.result;
+                if (r.ok && (data.resultCodeId === 101 || data.resultCodeId === 102)) {
+                    document.getElementById('r-id').innerText = data.result?.index || data.result || '-';
                     document.getElementById('r-date').innerText = new Date().toLocaleString('he-IL');
-                    document.getElementById('r-amount').innerText = parseFloat(s).toFixed(2) + ' ₪';
-                    document.getElementById('r-total').innerText = parseFloat(s).toFixed(2) + ' ₪';
+                    document.getElementById('r-amount').innerText = amount.toFixed(2) + ' NIS';
+                    document.getElementById('r-total').innerText = amount.toFixed(2) + ' NIS';
 
-                    status.innerHTML = '<b style="color:#22c55e">הצלחה! שולח להדפסה...</b>';
-                    
-                    // השהייה קטנה כדי לוודא שה-DOM התעדכן לפני ההדפסה
+                    status.innerHTML = '<b style="color:#22c55e">Success, sending to print...</b>';
+
                     setTimeout(() => {
                         window.print();
                         clr();
                     }, 800);
                 } else {
                     status.style.color = 'red';
-                    status.innerText = 'שגיאה: ' + (data.message || 'תקלה בשרת');
+                    status.innerText = 'Error: ' + (data.message || 'Server error');
                 }
             } catch (e) {
                 status.style.color = 'red';
-                status.innerText = 'תקלה בתקשורת';
+                status.innerText = 'Network error';
             }
         }
     </script>
