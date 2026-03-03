@@ -14,31 +14,53 @@
         .pay { grid-column: span 3; background: #22c55e; color: #000; font-weight: bold; }
         
         /* עיצוב לקבלה התרמית - מוסתר במסך */
-        #thermal-receipt { 
-            display: none; 
-            width: 80mm; 
-            background: #fff; 
-            color: #000; 
-            padding: 5mm;
+        #thermal-receipt {
+            position: absolute;
+            left: -9999px;
+            top: 0;
+            width: 58mm;
+            background: #fff;
+            color: #000;
+            padding: 2mm;
             box-sizing: border-box;
+            font-family: "Courier New", "Lucida Console", monospace;
+            font-size: 12px;
+            line-height: 1.35;
+            font-weight: 400;
+            letter-spacing: 0;
         }
 
         /* הגדרות הדפסה */
         @media print {
-            @page { margin: 0; }
-            body { background: #fff; padding: 0; margin: 0; }
-            .card { display: none !important; } /* מסתיר את הקופה */
-            #thermal-receipt { 
-                display: block !important; 
-                position: absolute;
-                top: 0;
-                right: 0;
-                width: 100%; /* מתאים לרוחב המדפסת */
+            @page {
+                size: 58mm auto;
+                margin: 0;
+            }
+            html, body {
+                width: 58mm;
+                margin: 0;
+                padding: 0;
+                background: #fff !important;
+                color: #000 !important;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+            * {
+                text-shadow: none !important;
+                filter: none !important;
+                transform: none !important;
+                font-weight: 400 !important;
+            }
+            .card { display: none !important; }
+            #thermal-receipt {
+                position: static !important;
+                left: auto;
+                width: 58mm !important;
+                padding: 2mm;
             }
         }
-
-        .receipt-center { text-align: center; }
-        .receipt-line { border-bottom: 1px dashed #000; margin: 5px 0; }
+        .receipt-center { text-align: center; font-weight: 400; }
+        .receipt-line { border-bottom: 1px solid #000; margin: 6px 0; }
         .receipt-flex { display: flex; justify-content: space-between; margin: 2px 0; }
         .receipt-amount { direction: ltr; unicode-bidi: plaintext; }
     </style>
