@@ -40,6 +40,7 @@
         .receipt-center { text-align: center; }
         .receipt-line { border-bottom: 1px dashed #000; margin: 5px 0; }
         .receipt-flex { display: flex; justify-content: space-between; margin: 2px 0; }
+        .receipt-amount { direction: ltr; unicode-bidi: plaintext; }
     </style>
 </head>
 <body>
@@ -118,12 +119,12 @@
         async function pay(type) {
             const amount = parseAmount(s);
             if (!amount) {
-                alert('Please enter a valid amount');
+                alert('נא להזין סכום תקין');
                 return;
             }
 
             status.style.color = '#aaa';
-            status.innerText = 'Creating invoice...';
+            status.innerText = 'מפיק חשבונית...';
 
             try {
                 const r = await fetch('/api/create', {
@@ -131,15 +132,20 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ amount: amount.toFixed(2), payType: type })
                 });
-                const data = await r.json();
+                let data = {};
+                try {
+                    data = await r.json();
+                } catch {
+                    data = {};
+                }
 
                 if (r.ok && (data.resultCodeId === 101 || data.resultCodeId === 102)) {
                     document.getElementById('r-id').innerText = data.result?.index || data.result || '-';
                     document.getElementById('r-date').innerText = new Date().toLocaleString('he-IL');
-                    document.getElementById('r-amount').innerText = amount.toFixed(2) + ' NIS';
-                    document.getElementById('r-total').innerText = amount.toFixed(2) + ' NIS';
+                    document.getElementById('r-amount').innerHTML = '<span class="receipt-amount">' + amount.toFixed(2) + ' ₪</span>';
+                    document.getElementById('r-total').innerHTML = '<span class="receipt-amount">' + amount.toFixed(2) + ' ₪</span>';
 
-                    status.innerHTML = '<b style="color:#22c55e">Success, sending to print...</b>';
+                    status.innerHTML = '<b style="color:#22c55e">הצלחה, שולח להדפסה...</b>';
 
                     setTimeout(() => {
                         window.print();
@@ -147,11 +153,12 @@
                     }, 800);
                 } else {
                     status.style.color = 'red';
-                    status.innerText = 'Error: ' + (data.message || 'Server error');
+                    const serverMessage = data.message || data.error || data.details?.message || ('תקלה בשרת (' + r.status + ')');
+                    status.innerText = 'שגיאה: ' + serverMessage;
                 }
             } catch (e) {
                 status.style.color = 'red';
-                status.innerText = 'Network error';
+                status.innerText = 'תקלה בתקשורת';
             }
         }
     </script>
