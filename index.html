@@ -18,13 +18,13 @@
             position: absolute;
             left: -9999px;
             top: 0;
-            width: 58mm;
+            width: 48mm;
             background: #fff;
             color: #000;
-            padding: 2mm;
+            padding: 1.5mm;
             box-sizing: border-box;
             font-family: "Courier New", "Lucida Console", monospace;
-            font-size: 12px;
+            font-size: 11px;
             line-height: 1.35;
             font-weight: 400;
             letter-spacing: 0;
@@ -55,8 +55,21 @@
             #thermal-receipt {
                 position: static !important;
                 left: auto;
-                width: 58mm !important;
-                padding: 2mm;
+                width: 48mm !important;
+                padding: 1.5mm;
+            }
+            .receipt-flex {
+                display: block;
+                margin: 4px 0;
+            }
+            .receipt-flex span {
+                display: block;
+                text-align: right;
+            }
+            .receipt-flex span:last-child {
+                text-align: left;
+                direction: ltr;
+                unicode-bidi: plaintext;
             }
         }
         .receipt-center { text-align: center; font-weight: 400; }
