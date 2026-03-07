@@ -66,6 +66,8 @@ export default async function handler(req, res) {
         }
 
         const payload = {
+            producibleDocumentType: "InvoiceReceipt",
+            includeDeleted: false,
             providerUserToken: SMARTBEE_PROVIDER_USER_TOKEN,
             page,
             amountPerPage,
