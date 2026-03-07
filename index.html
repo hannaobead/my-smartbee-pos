@@ -12,6 +12,14 @@
         .numpad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
         button { padding: 20px; font-size: 22px; border-radius: 10px; border: none; cursor: pointer; background: #252525; color: #fff; }
         .pay { grid-column: span 3; background: #22c55e; color: #000; font-weight: bold; }
+        .history-btn { grid-column: span 3; background: #0ea5e9; color: #fff; font-weight: bold; }
+        .history-panel { margin-top: 15px; display: none; background: #101010; border: 1px solid #2a2a2a; border-radius: 12px; padding: 10px; }
+        .history-panel h3 { margin: 0 0 8px 0; font-size: 16px; }
+        .history-list { max-height: 220px; overflow: auto; font-size: 13px; }
+        .history-item { border-bottom: 1px solid #2c2c2c; padding: 8px 0; }
+        .history-item:last-child { border-bottom: 0; }
+        .history-top { display: flex; justify-content: space-between; gap: 10px; }
+        .history-empty { color: #aaa; font-size: 13px; }
         
         /* עיצוב לקבלה התרמית - מוסתר במסך */
         #thermal-receipt {
@@ -93,8 +101,13 @@
             <button onclick="num('1')">1</button><button onclick="num('2')">2</button><button onclick="num('3')">3</button>
             <button onclick="num('.')">.</button><button onclick="num('0')">0</button><button style="color:red" onclick="clr()">C</button>
             <button class="pay" onclick="pay(1)">הפק והדפס (מזומן)</button>
+            <button class="history-btn" onclick="toggleHistory()">היסטוריה</button>
         </div>
         <div id="status" style="margin-top: 15px; text-align: center; font-size: 14px;"></div>
+        <div id="history-panel" class="history-panel">
+            <h3>היסטוריית מסמכים (POS)</h3>
+            <div id="history-list" class="history-list"></div>
+        </div>
     </div>
 
     <div id="thermal-receipt">
@@ -127,6 +140,8 @@
         let s = '';
         const display = document.getElementById('display');
         const status = document.getElementById('status');
+        const historyPanel = document.getElementById('history-panel');
+        const historyList = document.getElementById('history-list');
 
         function num(n) {
             if (n === '.' && s.includes('.')) return;
@@ -155,6 +170,78 @@
             return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
         }
 
+        function formatHistoryDate(dateValue) {
+            if (!dateValue) return '-';
+            const d = new Date(dateValue);
+            return Number.isNaN(d.getTime()) ? String(dateValue) : d.toLocaleString('he-IL');
+        }
+
+        function getLocalHistory() {
+            try {
+                const raw = localStorage.getItem('posHistory');
+                const data = raw ? JSON.parse(raw) : [];
+                return Array.isArray(data) ? data : [];
+            } catch {
+                return [];
+            }
+        }
+
+        function saveLocalHistory(item) {
+            const history = getLocalHistory();
+            history.unshift(item);
+            localStorage.setItem('posHistory', JSON.stringify(history.slice(0, 200)));
+        }
+
+        function renderHistoryItems(items, noteText) {
+            if (!items || items.length === 0) {
+                historyList.innerHTML = '<div class="history-empty">לא נמצאו מסמכי POS בטווח שנבחר.</div>';
+                return;
+            }
+            const note = noteText ? `<div class="history-empty" style="margin-bottom:8px">${noteText}</div>` : '';
+            historyList.innerHTML = note + items.map((item) => `
+                <div class="history-item">
+                    <div class="history-top">
+                        <strong>#${item.index || '-'}</strong>
+                        <span>${Number(item.amount || 0).toFixed(2)} ₪</span>
+                    </div>
+                    <div>${formatHistoryDate(item.docDate)}</div>
+                </div>
+            `).join('');
+        }
+
+        async function loadHistory() {
+            historyList.innerHTML = '<div class="history-empty">טוען...</div>';
+            try {
+                const toDate = new Date().toISOString();
+                const fromDate = new Date(Date.now() - 1000 * 60 * 60 * 24 * 30).toISOString();
+                const r = await fetch(`/api/history?page=1&amountPerPage=30&fromDate=${encodeURIComponent(fromDate)}&toDate=${encodeURIComponent(toDate)}`);
+                const data = await r.json();
+                if (!r.ok) {
+                    throw new Error(data.error || 'שגיאה בטעינת היסטוריה');
+                }
+
+                if (!data.items || data.items.length === 0) {
+                    historyList.innerHTML = '<div class="history-empty">לא נמצאו מסמכי POS בטווח שנבחר.</div>';
+                    return;
+                }
+
+                renderHistoryItems(data.items);
+            } catch (e) {
+                const local = getLocalHistory();
+                if (local.length > 0) {
+                    renderHistoryItems(local, 'הוצג גיבוי מקומי (ל־Smartbee אין הרשאה כרגע לחיפוש מסמכים).');
+                } else {
+                    historyList.innerHTML = `<div class="history-empty">שגיאה: ${e.message || 'לא ניתן לטעון היסטוריה'}</div>`;
+                }
+            }
+        }
+
+        function toggleHistory() {
+            const open = historyPanel.style.display === 'block';
+            historyPanel.style.display = open ? 'none' : 'block';
+            if (!open) loadHistory();
+        }
+
         async function pay(type) {
             const amount = parseAmount(s);
             if (!amount) {
@@ -179,10 +266,13 @@
                 }
 
                 if (r.ok && (data.resultCodeId === 101 || data.resultCodeId === 102)) {
-                    document.getElementById('r-id').innerText = data.result?.index || data.result || '-';
-                    document.getElementById('r-date').innerText = new Date().toLocaleString('he-IL');
+                    const docIndex = data.result?.index || data.result || '-';
+                    const docDate = new Date().toISOString();
+                    document.getElementById('r-id').innerText = docIndex;
+                    document.getElementById('r-date').innerText = new Date(docDate).toLocaleString('he-IL');
                     document.getElementById('r-amount').innerHTML = '<span class="receipt-amount">' + amount.toFixed(2) + ' ₪</span>';
                     document.getElementById('r-total').innerHTML = '<span class="receipt-amount">' + amount.toFixed(2) + ' ₪</span>';
+                    saveLocalHistory({ index: docIndex, amount: amount.toFixed(2), docDate });
 
                     status.innerHTML = '<b style="color:#22c55e">הצלחה, שולח להדפסה...</b>';
 

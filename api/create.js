@@ -51,6 +51,8 @@ export default async function handler(req, res) {
             providerUserToken: SMARTBEE_PROVIDER_USER_TOKEN,
             providerMsgId: uniqueId,
             providerMsgReferenceId: `POS-${uniqueId}`,
+            title: "POS",
+            comments: "SOURCE:POS",
             customer: {
                 name: "General Customer",
                 email: "office@espressoart.co.il",
