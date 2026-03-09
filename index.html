@@ -196,18 +196,18 @@
         function extractDocIndex(result) {
             const direct = result?.index;
             if (typeof direct === 'number' && Number.isFinite(direct)) return String(direct);
-            if (typeof direct === 'string' && direct.trim()) return direct.trim();
+            if (typeof direct === 'string' && direct.trim() && Number.isFinite(Number(direct))) return String(Number(direct));
 
             const raw = result?.raw;
             if (typeof raw === 'number' && Number.isFinite(raw)) return String(raw);
             if (typeof raw === 'string' && raw.trim()) {
                 const asNumber = Number(raw);
-                return Number.isFinite(asNumber) ? String(asNumber) : raw.trim();
+                return Number.isFinite(asNumber) ? String(asNumber) : '-';
             }
             if (raw && typeof raw === 'object') {
                 const nested = raw.index;
                 if (typeof nested === 'number' && Number.isFinite(nested)) return String(nested);
-                if (typeof nested === 'string' && nested.trim()) return nested.trim();
+                if (typeof nested === 'string' && nested.trim() && Number.isFinite(Number(nested))) return String(Number(nested));
             }
             return '-';
         }

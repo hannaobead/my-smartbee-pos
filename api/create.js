@@ -4,7 +4,7 @@ const SMARTBEE_PASSWORD = process.env.SMARTBEE_PASSWORD;
 const SMARTBEE_PROVIDER_USER_TOKEN = process.env.SMARTBEE_PROVIDER_USER_TOKEN;
 const AUTH_TIMEOUT_MS = 8000;
 const CREATE_TIMEOUT_MS = 12000;
-const SEARCH_TIMEOUT_MS = 3500;
+const SEARCH_TIMEOUT_MS = 5000;
 
 async function safeJson(response) {
     const text = await response.text();
@@ -25,42 +25,55 @@ async function fetchWithTimeout(url, options, timeoutMs) {
     }
 }
 
+function delay(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 async function resolveDocumentIndex({ token, uniqueId, nowIso, amount }) {
-    const fromDate = new Date(Date.parse(nowIso) - 1000 * 60 * 15).toISOString();
-    const payload = {
-        producibleDocumentType: "InvoiceReceipt",
-        includeDeleted: false,
-        providerUserToken: SMARTBEE_PROVIDER_USER_TOKEN,
-        page: 1,
-        amountPerPage: 50,
-        sortingField: "docDate",
-        sortDirection: "Descending",
-        fromDate,
-        toDate: new Date().toISOString()
-    };
+    for (let attempt = 0; attempt < 3; attempt++) {
+        const fromDate = new Date(Date.parse(nowIso) - 1000 * 60 * 60).toISOString();
+        const payload = {
+            producibleDocumentType: "InvoiceReceipt",
+            includeDeleted: false,
+            providerUserToken: SMARTBEE_PROVIDER_USER_TOKEN,
+            page: 1,
+            amountPerPage: 100,
+            sortingField: "docDate",
+            sortDirection: "Descending",
+            fromDate,
+            toDate: new Date().toISOString()
+        };
 
-    const searchResp = await fetchWithTimeout(`${SB_BASE}/documents/search`, {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify(payload)
-    }, SEARCH_TIMEOUT_MS);
-    const searchData = await safeJson(searchResp);
-    const items = searchData?.result?.items || [];
+        const searchResp = await fetchWithTimeout(`${SB_BASE}/documents/search`, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${token}`
+            },
+            body: JSON.stringify(payload)
+        }, SEARCH_TIMEOUT_MS);
+        const searchData = await safeJson(searchResp);
+        const items = searchData?.result?.items || [];
 
-    const matched = items.find((doc) => {
-        const comments = String(doc?.comments || "");
-        if (!comments.includes(uniqueId)) return false;
+        const matched = items.find((doc) => {
+            const comments = String(doc?.comments || "");
+            if (!comments.includes(uniqueId)) return false;
 
-        const totalPaid = Number(doc?.receiptDetails?.totalPaid || 0);
-        const totalInvoice = Number(doc?.invoiceDetails?.total || 0);
-        const docTotal = Number.isFinite(totalPaid) && totalPaid > 0 ? totalPaid : totalInvoice;
-        return Number.isFinite(docTotal) && Math.abs(docTotal - amount) < 0.02;
-    });
+            const totalPaid = Number(doc?.receiptDetails?.totalPaid || 0);
+            const totalInvoice = Number(doc?.invoiceDetails?.total || 0);
+            const docTotal = Number.isFinite(totalPaid) && totalPaid > 0 ? totalPaid : totalInvoice;
+            return Number.isFinite(docTotal) && Math.abs(docTotal - amount) < 0.02;
+        });
 
-    return matched?.index || null;
+        if (Number.isFinite(Number(matched?.index))) {
+            return Number(matched.index);
+        }
+
+        if (attempt < 2) {
+            await delay(700);
+        }
+    }
+    return null;
 }
 
 export default async function handler(req, res) {
