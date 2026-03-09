@@ -324,11 +324,14 @@
             status.innerText = 'מפיק חשבונית...';
 
             try {
+                const controller = new AbortController();
+                const timer = setTimeout(() => controller.abort(), 15000);
                 const r = await fetch('/api/create', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ amount: amount.toFixed(2), payType: type })
-                });
+                    body: JSON.stringify({ amount: amount.toFixed(2), payType: type }),
+                    signal: controller.signal
+                }).finally(() => clearTimeout(timer));
                 let data = {};
                 try {
                     data = await r.json();
@@ -352,7 +355,7 @@
                 }
             } catch (e) {
                 status.style.color = 'red';
-                status.innerText = 'תקלה בתקשורת';
+                status.innerText = e?.name === 'AbortError' ? 'השרת מתעכב, נסה שוב' : 'תקלה בתקשורת';
             }
         }
     </script>

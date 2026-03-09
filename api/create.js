@@ -2,6 +2,9 @@
 const SMARTBEE_CLIENT_ID = process.env.SMARTBEE_CLIENT_ID;
 const SMARTBEE_PASSWORD = process.env.SMARTBEE_PASSWORD;
 const SMARTBEE_PROVIDER_USER_TOKEN = process.env.SMARTBEE_PROVIDER_USER_TOKEN;
+const AUTH_TIMEOUT_MS = 8000;
+const CREATE_TIMEOUT_MS = 12000;
+const SEARCH_TIMEOUT_MS = 3500;
 
 async function safeJson(response) {
     const text = await response.text();
@@ -9,6 +12,16 @@ async function safeJson(response) {
         return text ? JSON.parse(text) : {};
     } catch {
         return { message: text || "Invalid JSON response" };
+    }
+}
+
+async function fetchWithTimeout(url, options, timeoutMs) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+        return await fetch(url, { ...options, signal: controller.signal });
+    } finally {
+        clearTimeout(timer);
     }
 }
 
@@ -26,14 +39,14 @@ async function resolveDocumentIndex({ token, uniqueId, nowIso, amount }) {
         toDate: new Date().toISOString()
     };
 
-    const searchResp = await fetch(`${SB_BASE}/documents/search`, {
+    const searchResp = await fetchWithTimeout(`${SB_BASE}/documents/search`, {
         method: "POST",
         headers: {
             "Content-Type": "application/json",
             Authorization: `Bearer ${token}`
         },
         body: JSON.stringify(payload)
-    });
+    }, SEARCH_TIMEOUT_MS);
     const searchData = await safeJson(searchResp);
     const items = searchData?.result?.items || [];
 
@@ -64,14 +77,14 @@ export default async function handler(req, res) {
     }
 
     try {
-        const auth = await fetch(`${SB_BASE}/login/authenticate`, {
+        const auth = await fetchWithTimeout(`${SB_BASE}/login/authenticate`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
                 clientId: SMARTBEE_CLIENT_ID,
                 password: SMARTBEE_PASSWORD
             })
-        });
+        }, AUTH_TIMEOUT_MS);
 
         const authData = await safeJson(auth);
         if (!auth.ok || !authData.token) {
@@ -119,14 +132,14 @@ export default async function handler(req, res) {
             payload.receiptDetails.otherPaymentItems = [{ sum: parsedAmount, date: now, description: "Card" }];
         }
 
-        const sbResponse = await fetch(`${SB_BASE}/documents/create`, {
+        const sbResponse = await fetchWithTimeout(`${SB_BASE}/documents/create`, {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
                 Authorization: `Bearer ${token}`
             },
             body: JSON.stringify(payload)
-        });
+        }, CREATE_TIMEOUT_MS);
 
         const result = await safeJson(sbResponse);
         if (!sbResponse.ok) {
