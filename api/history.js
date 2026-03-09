@@ -41,13 +41,33 @@ function isPosDocument(doc) {
 }
 
 function toAmount(doc) {
+    const candidates = [
+        doc?.receiptDetails?.totalPaid,
+        doc?.receiptDetails?.totalPreTaxWithholding,
+        doc?.invoiceDetails?.total,
+        doc?.receiptDetails?.totalCash + doc?.receiptDetails?.totalCreditCards + doc?.receiptDetails?.totalWireTransfers + doc?.receiptDetails?.totalChecks + doc?.receiptDetails?.totalOther
+    ];
+
+    for (const value of candidates) {
+        const n = Number(value);
+        if (Number.isFinite(n) && n > 0) {
+            return Number(n.toFixed(2));
+        }
+    }
+
     const items = doc?.documentItems?.paymentItems || [];
-    const total = items.reduce((sum, item) => {
+    const fallback = items.reduce((sum, item) => {
         const qty = Number(item?.quantity || 0);
         const price = Number(item?.pricePerUnit || 0);
         return sum + (Number.isFinite(qty) && Number.isFinite(price) ? qty * price : 0);
     }, 0);
-    return Number(total.toFixed(2));
+    return Number(fallback.toFixed(2));
+}
+
+function toTimestamp(value) {
+    if (!value) return 0;
+    const t = Date.parse(value);
+    return Number.isNaN(t) ? 0 : t;
 }
 
 export default async function handler(req, res) {
@@ -138,12 +158,13 @@ export default async function handler(req, res) {
             .map((doc) => ({
                 id: doc.id || "",
                 index: doc.index || "",
-                docDate: doc.docDate || doc.creationDate || null,
+                docDate: doc.creationDate || doc.docDate || null,
                 amount: toAmount(doc),
                 docType: doc.docType || "",
                 customerName: doc?.customer?.name || "",
                 source: doc?.comments || doc?.title || ""
-            }));
+            }))
+            .sort((a, b) => toTimestamp(b.docDate) - toTimestamp(a.docDate));
 
         return res.status(200).json({
             resultCodeId: result.resultCodeId || 0,

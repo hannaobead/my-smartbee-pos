@@ -285,7 +285,13 @@
                 }
 
                 if (r.ok && (data.resultCodeId === 101 || data.resultCodeId === 102)) {
-                    const docIndex = data.result?.index || data.result || '-';
+                    const rawResult = data?.result;
+                    const numericRaw = Number(rawResult);
+                    const numericNestedRaw = Number(rawResult?.raw);
+                    const docIndex = rawResult?.index
+                        || (Number.isFinite(numericRaw) ? numericRaw : null)
+                        || (Number.isFinite(numericNestedRaw) ? numericNestedRaw : null)
+                        || '-';
                     const docDate = new Date().toISOString();
                     const vatRate = 0.18;
                     const subtotal = amount / (1 + vatRate);

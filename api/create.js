@@ -12,6 +12,44 @@ async function safeJson(response) {
     }
 }
 
+async function resolveDocumentIndex({ token, uniqueId, nowIso, amount }) {
+    const fromDate = new Date(Date.parse(nowIso) - 1000 * 60 * 15).toISOString();
+    const payload = {
+        producibleDocumentType: "InvoiceReceipt",
+        includeDeleted: false,
+        providerUserToken: SMARTBEE_PROVIDER_USER_TOKEN,
+        page: 1,
+        amountPerPage: 50,
+        sortingField: "docDate",
+        sortDirection: "Descending",
+        fromDate,
+        toDate: new Date().toISOString()
+    };
+
+    const searchResp = await fetch(`${SB_BASE}/documents/search`, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify(payload)
+    });
+    const searchData = await safeJson(searchResp);
+    const items = searchData?.result?.items || [];
+
+    const matched = items.find((doc) => {
+        const comments = String(doc?.comments || "");
+        if (!comments.includes(uniqueId)) return false;
+
+        const totalPaid = Number(doc?.receiptDetails?.totalPaid || 0);
+        const totalInvoice = Number(doc?.invoiceDetails?.total || 0);
+        const docTotal = Number.isFinite(totalPaid) && totalPaid > 0 ? totalPaid : totalInvoice;
+        return Number.isFinite(docTotal) && Math.abs(docTotal - amount) < 0.02;
+    });
+
+    return matched?.index || null;
+}
+
 export default async function handler(req, res) {
     if (req.method !== "POST") return res.status(405).send("Method Not Allowed");
 
@@ -52,7 +90,7 @@ export default async function handler(req, res) {
             providerMsgId: uniqueId,
             providerMsgReferenceId: `POS-${uniqueId}`,
             title: "POS",
-            comments: "SOURCE:POS",
+            comments: `SOURCE:POS|${uniqueId}`,
             customer: {
                 name: "General Customer",
                 email: "office@espressoart.co.il",
@@ -97,8 +135,31 @@ export default async function handler(req, res) {
                 details: result
             });
         }
+        let resolvedIndex = null;
+        if (result?.result && typeof result.result === "object" && Number.isFinite(Number(result.result.index))) {
+            resolvedIndex = Number(result.result.index);
+        } else if (Number.isFinite(Number(result?.result))) {
+            resolvedIndex = Number(result.result);
+        } else if (result?.resultCodeId === 101 || result?.resultCodeId === 102) {
+            try {
+                resolvedIndex = await resolveDocumentIndex({
+                    token,
+                    uniqueId,
+                    nowIso: now,
+                    amount: parsedAmount
+                });
+            } catch {
+                resolvedIndex = null;
+            }
+        }
 
-        return res.status(200).json(result);
+        return res.status(200).json({
+            ...result,
+            result: {
+                raw: result?.result ?? null,
+                index: resolvedIndex
+            }
+        });
     } catch (error) {
         return res.status(500).json({ error: error.message || "Unexpected server error" });
     }
