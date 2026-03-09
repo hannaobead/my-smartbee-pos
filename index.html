@@ -13,6 +13,9 @@
         button { padding: 20px; font-size: 22px; border-radius: 10px; border: none; cursor: pointer; background: #252525; color: #fff; }
         .pay { grid-column: span 3; background: #22c55e; color: #000; font-weight: bold; }
         .history-btn { grid-column: span 3; background: linear-gradient(135deg, #0ea5e9, #0369a1); color: #fff; font-weight: bold; }
+        .open-day-btn { grid-column: span 3; background: linear-gradient(135deg, #f59e0b, #b45309); color: #111; font-weight: bold; }
+        .day-status-btn { grid-column: span 3; background: linear-gradient(135deg, #34d399, #047857); color: #072014; font-weight: bold; }
+        .day-summary { margin-top: 10px; background: #111a12; border: 1px solid #2e5032; border-radius: 10px; padding: 8px; font-size: 12px; line-height: 1.5; color: #c4efc9; }
         .history-panel { margin-top: 15px; display: none; background: #0e141c; border: 1px solid #1f3246; border-radius: 14px; padding: 12px; }
         .history-panel h3 { margin: 0; font-size: 16px; color: #d7ecff; }
         .history-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
@@ -47,6 +50,22 @@
             overflow-wrap: anywhere;
             word-break: break-word;
         }
+        #daily-report {
+            position: absolute;
+            left: -9999px;
+            top: 0;
+            width: 48mm;
+            background: #fff;
+            color: #000;
+            padding: 1.5mm;
+            box-sizing: border-box;
+            font-family: "Courier New", "Lucida Console", monospace;
+            font-size: 12px;
+            line-height: 1.4;
+            overflow: hidden;
+            overflow-wrap: anywhere;
+            word-break: break-word;
+        }
 
         /* הגדרות הדפסה */
         @media print {
@@ -70,12 +89,21 @@
                 font-weight: 400 !important;
             }
             .card { display: none !important; }
+            #thermal-receipt, #daily-report { display: none !important; }
             #thermal-receipt {
                 position: static !important;
                 left: auto;
                 width: 48mm !important;
                 padding: 1.5mm;
             }
+            #daily-report {
+                position: static !important;
+                left: auto;
+                width: 48mm !important;
+                padding: 1.5mm;
+            }
+            body.print-invoice #thermal-receipt { display: block !important; }
+            body.print-day #daily-report { display: block !important; }
             .receipt-flex {
                 display: block;
                 margin: 4px 0;
@@ -107,10 +135,13 @@
             <button onclick="num('4')">4</button><button onclick="num('5')">5</button><button onclick="num('6')">6</button>
             <button onclick="num('1')">1</button><button onclick="num('2')">2</button><button onclick="num('3')">3</button>
             <button onclick="num('.')">.</button><button onclick="num('0')">0</button><button style="color:red" onclick="clr()">C</button>
+            <button class="open-day-btn" onclick="openDaySessionManual()">פתיחת יום (מנהל)</button>
+            <button class="day-status-btn" onclick="printDayStatus()">סטטוס יום והדפסה</button>
             <button class="pay" onclick="pay(1)">הפק והדפס (מזומן)</button>
             <button class="history-btn" onclick="toggleHistory()">היסטוריה</button>
         </div>
         <div id="status" style="margin-top: 15px; text-align: center; font-size: 14px;"></div>
+        <div id="day-summary" class="day-summary"></div>
         <div id="history-panel" class="history-panel">
             <div class="history-header">
                 <h3>היסטוריית מסמכים</h3>
@@ -153,14 +184,36 @@
         <div class="receipt-line"></div>
         <p class="receipt-center" style="font-size: 0.9em;">תודה שקניתם אצלינו<br>MOMENTO PRINT & GIFT</p>
     </div>
+    <div id="daily-report">
+        <div class="receipt-center">
+            <h2 style="margin:0">Momento Print&Gift</h2>
+            <p style="margin:5px 0;">דוח מצב קופה יומי</p>
+        </div>
+        <div class="receipt-line"></div>
+        <p>תאריך: <span id="d-date"></span></p>
+        <p>שעת הפקה: <span id="d-generated"></span></p>
+        <div class="receipt-line"></div>
+        <div class="receipt-flex"><span>קופת פתיחה</span><span id="d-opening"></span></div>
+        <div class="receipt-flex"><span>הכנסות מזומן</span><span id="d-cash-sales"></span></div>
+        <div class="receipt-flex"><span>מס' חשבוניות מזומן</span><span id="d-tx-count"></span></div>
+        <div class="receipt-line"></div>
+        <div class="receipt-flex" style="font-size: 1.2em; font-weight: bold;">
+            <span>קופה צפויה בסוף יום</span><span id="d-expected"></span>
+        </div>
+        <div class="receipt-line"></div>
+        <p class="receipt-center" style="font-size:0.9em;">בדוק בפועל מול המזומן במגירה</p>
+    </div>
 
         <script>
         let s = '';
         const display = document.getElementById('display');
         const status = document.getElementById('status');
+        const daySummary = document.getElementById('day-summary');
         const historyPanel = document.getElementById('history-panel');
         const historyList = document.getElementById('history-list');
         let currentHistoryItems = [];
+        const ADMIN_PASSWORD = '1234';
+        const DAY_SESSION_KEY = 'posDaySessionV1';
 
         function num(n) {
             if (n === '.' && s.includes('.')) return;
@@ -218,6 +271,104 @@
             return Number.isNaN(d.getTime()) ? String(dateValue) : d.toLocaleString('he-IL');
         }
 
+        function getTodayKey() {
+            const d = new Date();
+            const y = d.getFullYear();
+            const m = String(d.getMonth() + 1).padStart(2, '0');
+            const day = String(d.getDate()).padStart(2, '0');
+            return `${y}-${m}-${day}`;
+        }
+
+        function getStoredDaySession() {
+            try {
+                const raw = localStorage.getItem(DAY_SESSION_KEY);
+                return raw ? JSON.parse(raw) : null;
+            } catch {
+                return null;
+            }
+        }
+
+        function getTodaySession() {
+            const session = getStoredDaySession();
+            if (!session) return null;
+            return session.dayKey === getTodayKey() ? session : null;
+        }
+
+        function saveDaySession(session) {
+            localStorage.setItem(DAY_SESSION_KEY, JSON.stringify(session));
+        }
+
+        function updateDaySummary() {
+            const session = getTodaySession();
+            if (!session) {
+                daySummary.innerHTML = 'אין פתיחת יום פעילה. לפני הפקת חשבונית יש לבצע פתיחת יום עם סיסמת מנהל.';
+                return;
+            }
+            const expected = Number(session.openingCash || 0) + Number(session.cashSalesTotal || 0);
+            daySummary.innerHTML = `יום פעיל: ${session.dayKey}<br>קופת פתיחה: ${formatCurrency(session.openingCash)}<br>מזומן שנצבר: ${formatCurrency(session.cashSalesTotal)}<br>קופה צפויה: ${formatCurrency(expected)}`;
+        }
+
+        function verifyManagerPassword() {
+            const pass = prompt('הזן סיסמת מנהל:');
+            if (pass === null) return false;
+            if (pass !== ADMIN_PASSWORD) {
+                alert('סיסמת מנהל שגויה');
+                return false;
+            }
+            return true;
+        }
+
+        function openDaySessionManual() {
+            if (!verifyManagerPassword()) return;
+            const openingInput = prompt('הזן קופת פתיחה (₪):', '0');
+            if (openingInput === null) return;
+            const openingCash = Number(openingInput);
+            if (!Number.isFinite(openingCash) || openingCash < 0) {
+                alert('סכום קופת פתיחה לא תקין');
+                return;
+            }
+            const session = {
+                dayKey: getTodayKey(),
+                openingCash: Number(openingCash.toFixed(2)),
+                cashSalesTotal: 0,
+                txCount: 0,
+                openedAt: new Date().toISOString()
+            };
+            saveDaySession(session);
+            updateDaySummary();
+            status.style.color = '#22c55e';
+            status.innerText = 'יום נפתח בהצלחה';
+        }
+
+        function ensureDaySessionForSale() {
+            let session = getTodaySession();
+            if (session) return session;
+            alert('יש לבצע פתיחת יום לפני הפקת חשבונית.');
+            openDaySessionManual();
+            session = getTodaySession();
+            return session;
+        }
+
+        function registerCashSale(amount) {
+            const session = getTodaySession();
+            if (!session) return;
+            session.cashSalesTotal = Number((Number(session.cashSalesTotal || 0) + Number(amount)).toFixed(2));
+            session.txCount = Number(session.txCount || 0) + 1;
+            session.lastSaleAt = new Date().toISOString();
+            saveDaySession(session);
+            updateDaySummary();
+        }
+
+        function printWithMode(mode, afterPrint) {
+            document.body.classList.remove('print-invoice', 'print-day');
+            document.body.classList.add(mode);
+            setTimeout(() => {
+                window.print();
+                document.body.classList.remove('print-invoice', 'print-day');
+                if (typeof afterPrint === 'function') afterPrint();
+            }, 250);
+        }
+
         function getLocalHistory() {
             try {
                 const raw = localStorage.getItem('posHistory');
@@ -248,9 +399,23 @@
             document.getElementById('r-gross').innerHTML = '<span class="receipt-amount">' + formatCurrency(safeAmount) + '</span>';
             document.getElementById('r-total').innerHTML = '<span class="receipt-amount">' + formatCurrency(safeAmount) + '</span>';
 
-            setTimeout(() => {
-                window.print();
-            }, 250);
+            printWithMode('print-invoice');
+        }
+
+        function printDayStatus() {
+            const session = getTodaySession();
+            if (!session) {
+                alert('אין יום פעיל. יש לבצע פתיחת יום קודם.');
+                return;
+            }
+            const expected = Number(session.openingCash || 0) + Number(session.cashSalesTotal || 0);
+            document.getElementById('d-date').innerText = session.dayKey;
+            document.getElementById('d-generated').innerText = new Date().toLocaleString('he-IL');
+            document.getElementById('d-opening').innerHTML = `<span class="receipt-amount">${formatCurrency(session.openingCash || 0)}</span>`;
+            document.getElementById('d-cash-sales').innerHTML = `<span class="receipt-amount">${formatCurrency(session.cashSalesTotal || 0)}</span>`;
+            document.getElementById('d-tx-count').innerText = String(session.txCount || 0);
+            document.getElementById('d-expected').innerHTML = `<span class="receipt-amount">${formatCurrency(expected)}</span>`;
+            printWithMode('print-day');
         }
 
         function printFromHistory(index) {
@@ -319,6 +484,8 @@
                 alert('נא להזין סכום תקין');
                 return;
             }
+            const session = ensureDaySessionForSale();
+            if (!session) return;
 
             status.style.color = '#aaa';
             status.innerText = 'מפיק חשבונית...';
@@ -344,6 +511,7 @@
                     const docDate = new Date().toISOString();
                     const historyItem = { index: docIndex, amount: amount.toFixed(2), docDate };
                     saveLocalHistory(historyItem);
+                    registerCashSale(amount);
                     fillReceiptAndPrint(historyItem);
 
                     status.innerHTML = '<b style="color:#22c55e">הצלחה, שולח להדפסה...</b>';
@@ -358,6 +526,8 @@
                 status.innerText = e?.name === 'AbortError' ? 'השרת מתעכב, נסה שוב' : 'תקלה בתקשורת';
             }
         }
+
+        updateDaySummary();
     </script>
 </body>
 </html>
