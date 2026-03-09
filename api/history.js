@@ -35,7 +35,8 @@ function isPosDocument(doc) {
         title.includes("POS") ||
         comments.includes("SOURCE:POS") ||
         customerName === "GENERAL CUSTOMER" ||
-        descriptions.some((d) => d.includes("POS SALE"))
+        customerName === "לקוח כללי" ||
+        descriptions.some((d) => d.includes("POS SALE") || d.includes("מכירה בקופה"))
     );
 }
 
@@ -108,7 +109,8 @@ export default async function handler(req, res) {
             });
             const parsed = await safeJson(sbResponse);
 
-            if (sbResponse.ok && (!parsed.resultCodeId || parsed.resultCodeId < 90)) {
+            const hasResultPayload = !!parsed?.result;
+            if (sbResponse.ok && hasResultPayload) {
                 result = parsed;
                 break;
             }
