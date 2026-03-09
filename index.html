@@ -325,7 +325,7 @@
 
             try {
                 const controller = new AbortController();
-                const timer = setTimeout(() => controller.abort(), 15000);
+                const timer = setTimeout(() => controller.abort(), 25000);
                 const r = await fetch('/api/create', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },

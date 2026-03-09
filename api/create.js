@@ -5,7 +5,7 @@ const SMARTBEE_PROVIDER_USER_TOKEN = process.env.SMARTBEE_PROVIDER_USER_TOKEN;
 const AUTH_TIMEOUT_MS = 8000;
 const CREATE_TIMEOUT_MS = 12000;
 const SEARCH_TIMEOUT_MS = 5000;
-const DETAILS_TIMEOUT_MS = 5000;
+const DETAILS_TIMEOUT_MS = 3000;
 
 async function safeJson(response) {
     const text = await response.text();
@@ -79,15 +79,21 @@ async function resolveDocumentIndex({ token, uniqueId, nowIso, amount }) {
 
 async function resolveIndexByDocumentId(token, documentId) {
     if (!documentId || typeof documentId !== "string") return null;
-    const detailsResp = await fetchWithTimeout(`${SB_BASE}/documents/${documentId}`, {
-        method: "GET",
-        headers: {
-            Authorization: `Bearer ${token}`
+    for (let attempt = 0; attempt < 6; attempt++) {
+        if (attempt > 0) await delay(900);
+        const detailsResp = await fetchWithTimeout(`${SB_BASE}/documents/${documentId}`, {
+            method: "GET",
+            headers: {
+                Authorization: `Bearer ${token}`
+            }
+        }, DETAILS_TIMEOUT_MS);
+        const detailsData = await safeJson(detailsResp);
+        const idx = detailsData?.result?.index;
+        if (Number.isFinite(Number(idx))) {
+            return Number(idx);
         }
-    }, DETAILS_TIMEOUT_MS);
-    const detailsData = await safeJson(detailsResp);
-    const idx = detailsData?.result?.index;
-    return Number.isFinite(Number(idx)) ? Number(idx) : null;
+    }
+    return null;
 }
 
 export default async function handler(req, res) {
