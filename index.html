@@ -12,14 +12,18 @@
         .numpad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
         button { padding: 20px; font-size: 22px; border-radius: 10px; border: none; cursor: pointer; background: #252525; color: #fff; }
         .pay { grid-column: span 3; background: #22c55e; color: #000; font-weight: bold; }
-        .history-btn { grid-column: span 3; background: #0ea5e9; color: #fff; font-weight: bold; }
-        .history-panel { margin-top: 15px; display: none; background: #101010; border: 1px solid #2a2a2a; border-radius: 12px; padding: 10px; }
-        .history-panel h3 { margin: 0 0 8px 0; font-size: 16px; }
-        .history-list { max-height: 220px; overflow: auto; font-size: 13px; }
-        .history-item { border-bottom: 1px solid #2c2c2c; padding: 8px 0; }
-        .history-item:last-child { border-bottom: 0; }
-        .history-top { display: flex; justify-content: space-between; gap: 10px; }
-        .history-empty { color: #aaa; font-size: 13px; }
+        .history-btn { grid-column: span 3; background: linear-gradient(135deg, #0ea5e9, #0369a1); color: #fff; font-weight: bold; }
+        .history-panel { margin-top: 15px; display: none; background: #0e141c; border: 1px solid #1f3246; border-radius: 14px; padding: 12px; }
+        .history-panel h3 { margin: 0; font-size: 16px; color: #d7ecff; }
+        .history-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+        .history-meta { font-size: 11px; color: #8bb9df; }
+        .history-list { max-height: 240px; overflow: auto; font-size: 13px; display: grid; gap: 8px; }
+        .history-item { background: #121b26; border: 1px solid #25374c; border-radius: 10px; padding: 9px; }
+        .history-top { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+        .history-doc { font-size: 14px; font-weight: 700; color: #eef7ff; }
+        .history-amount { font-size: 13px; font-weight: 700; color: #0f172a; background: #8de0ff; border-radius: 999px; padding: 3px 8px; }
+        .history-date { margin-top: 5px; color: #9fb2c6; font-size: 12px; }
+        .history-empty { color: #8ea2b7; font-size: 13px; padding: 8px 2px; }
         
         /* עיצוב לקבלה התרמית - מוסתר במסך */
         #thermal-receipt {
@@ -105,7 +109,10 @@
         </div>
         <div id="status" style="margin-top: 15px; text-align: center; font-size: 14px;"></div>
         <div id="history-panel" class="history-panel">
-            <h3>היסטוריית מסמכים (POS)</h3>
+            <div class="history-header">
+                <h3>היסטוריית מסמכים</h3>
+                <span class="history-meta">POS בלבד</span>
+            </div>
             <div id="history-list" class="history-list"></div>
         </div>
     </div>
@@ -113,19 +120,27 @@
     <div id="thermal-receipt">
         <div class="receipt-center">
             <h2 style="margin:0">Momento Print&Gift</h2>
-            <p style="margin: 5px 0;">עוסק מורשה: 000000000</p>
+            <p style="margin: 5px 0;">עוסק מורשה: 300829397</p>
         </div>
         <div class="receipt-line"></div>
         <div class="receipt-center">
             <b id="r-type">חשבונית מס קבלה</b><br>
-            מקור<br>
-            מספר: <span id="r-id"></span>
+            מס': <span id="r-id"></span><br>
+            נאמן למקור
         </div>
         <div class="receipt-line"></div>
         <p>תאריך: <span id="r-date"></span></p>
         <div class="receipt-flex">
-            <span>מכירה כללית (כולל מע"מ)</span>
-            <span id="r-amount"></span>
+            <span>סה"כ לפני מע"מ</span>
+            <span id="r-subtotal"></span>
+        </div>
+        <div class="receipt-flex">
+            <span>מע"מ (18%)</span>
+            <span id="r-vat"></span>
+        </div>
+        <div class="receipt-flex">
+            <span>סה"כ כולל מע"מ</span>
+            <span id="r-gross"></span>
         </div>
         <div class="receipt-line"></div>
         <div class="receipt-flex" style="font-size: 1.2em; font-weight: bold;">
@@ -170,6 +185,10 @@
             return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
         }
 
+        function formatCurrency(value) {
+            return `₪ ${Number(value).toFixed(2)}`;
+        }
+
         function formatHistoryDate(dateValue) {
             if (!dateValue) return '-';
             const d = new Date(dateValue);
@@ -201,10 +220,10 @@
             historyList.innerHTML = note + items.map((item) => `
                 <div class="history-item">
                     <div class="history-top">
-                        <strong>#${item.index || '-'}</strong>
-                        <span>${Number(item.amount || 0).toFixed(2)} ₪</span>
+                        <span class="history-doc">#${item.index || '-'}</span>
+                        <span class="history-amount">${Number(item.amount || 0).toFixed(2)} ₪</span>
                     </div>
-                    <div>${formatHistoryDate(item.docDate)}</div>
+                    <div class="history-date">${formatHistoryDate(item.docDate)}</div>
                 </div>
             `).join('');
         }
@@ -268,10 +287,16 @@
                 if (r.ok && (data.resultCodeId === 101 || data.resultCodeId === 102)) {
                     const docIndex = data.result?.index || data.result || '-';
                     const docDate = new Date().toISOString();
+                    const vatRate = 0.18;
+                    const subtotal = amount / (1 + vatRate);
+                    const vatAmount = amount - subtotal;
+
                     document.getElementById('r-id').innerText = docIndex;
                     document.getElementById('r-date').innerText = new Date(docDate).toLocaleString('he-IL');
-                    document.getElementById('r-amount').innerHTML = '<span class="receipt-amount">' + amount.toFixed(2) + ' ₪</span>';
-                    document.getElementById('r-total').innerHTML = '<span class="receipt-amount">' + amount.toFixed(2) + ' ₪</span>';
+                    document.getElementById('r-subtotal').innerHTML = '<span class="receipt-amount">' + formatCurrency(subtotal) + '</span>';
+                    document.getElementById('r-vat').innerHTML = '<span class="receipt-amount">' + formatCurrency(vatAmount) + '</span>';
+                    document.getElementById('r-gross').innerHTML = '<span class="receipt-amount">' + formatCurrency(amount) + '</span>';
+                    document.getElementById('r-total').innerHTML = '<span class="receipt-amount">' + formatCurrency(amount) + '</span>';
                     saveLocalHistory({ index: docIndex, amount: amount.toFixed(2), docDate });
 
                     status.innerHTML = '<b style="color:#22c55e">הצלחה, שולח להדפסה...</b>';
