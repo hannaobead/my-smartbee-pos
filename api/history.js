@@ -12,6 +12,18 @@ async function safeJson(response) {
     }
 }
 
+function toIntInRange(value, fallback, min, max) {
+    const parsed = Number.parseInt(String(value), 10);
+    if (!Number.isFinite(parsed)) return fallback;
+    return Math.min(max, Math.max(min, parsed));
+}
+
+function isValidIsoDate(value) {
+    if (!value || typeof value !== "string") return false;
+    const d = new Date(value);
+    return !Number.isNaN(d.getTime());
+}
+
 function isPosDocument(doc) {
     const title = (doc?.title || "").toUpperCase();
     const comments = (doc?.comments || "").toUpperCase();
@@ -44,10 +56,10 @@ export default async function handler(req, res) {
         return res.status(500).json({ error: "Missing Smartbee environment variables" });
     }
 
-    const page = Math.max(1, Number(req.query?.page || 1));
-    const amountPerPage = Math.min(100, Math.max(1, Number(req.query?.amountPerPage || 20)));
-    const fromDate = req.query?.fromDate;
-    const toDate = req.query?.toDate;
+    const page = toIntInRange(req.query?.page, 1, 1, 100000);
+    const amountPerPage = toIntInRange(req.query?.amountPerPage, 20, 1, 100);
+    const fromDate = isValidIsoDate(req.query?.fromDate) ? req.query.fromDate : undefined;
+    const toDate = isValidIsoDate(req.query?.toDate) ? req.query.toDate : undefined;
 
     try {
         const auth = await fetch(`${SB_BASE}/login/authenticate`, {
@@ -65,8 +77,7 @@ export default async function handler(req, res) {
             });
         }
 
-        const payload = {
-            producibleDocumentType: "InvoiceReceipt",
+        const basePayload = {
             includeDeleted: false,
             providerUserToken: SMARTBEE_PROVIDER_USER_TOKEN,
             page,
@@ -74,32 +85,48 @@ export default async function handler(req, res) {
             sortingField: "docDate",
             sortDirection: "Descending"
         };
-        if (fromDate) payload.fromDate = fromDate;
-        if (toDate) payload.toDate = toDate;
+        if (fromDate) basePayload.fromDate = fromDate;
+        if (toDate) basePayload.toDate = toDate;
 
-        const sbResponse = await fetch(`${SB_BASE}/documents/search`, {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-                Authorization: `Bearer ${authData.token}`
-            },
-            body: JSON.stringify(payload)
-        });
-        const result = await safeJson(sbResponse);
+        const payloadAttempts = [
+            { ...basePayload, producibleDocumentType: "InvoiceReceipt" },
+            { ...basePayload, docType: "InvoiceReceipt" },
+            { ...basePayload }
+        ];
 
-        if (!sbResponse.ok) {
-            return res.status(sbResponse.status || 502).json({
-                error: result.message || "Smartbee documents search failed",
-                resultCodeId: result.resultCodeId,
-                details: result
+        let result = null;
+        let lastError = null;
+
+        for (const payload of payloadAttempts) {
+            const sbResponse = await fetch(`${SB_BASE}/documents/search`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${authData.token}`
+                },
+                body: JSON.stringify(payload)
             });
+            const parsed = await safeJson(sbResponse);
+
+            if (sbResponse.ok && (!parsed.resultCodeId || parsed.resultCodeId < 90)) {
+                result = parsed;
+                break;
+            }
+
+            lastError = {
+                status: sbResponse.status || 502,
+                resultCodeId: parsed?.resultCodeId,
+                message: parsed?.message,
+                details: parsed
+            };
         }
-        if (result.resultCodeId && result.resultCodeId >= 90) {
-            const statusCode = result.resultCodeId === 94 ? 403 : 502;
+
+        if (!result) {
+            const statusCode = lastError?.resultCodeId === 94 ? 403 : (lastError?.status || 502);
             return res.status(statusCode).json({
-                error: result.message || "Smartbee documents search failed",
-                resultCodeId: result.resultCodeId,
-                details: result
+                error: lastError?.message || "Smartbee documents search failed",
+                resultCodeId: lastError?.resultCodeId,
+                details: lastError?.details
             });
         }
 

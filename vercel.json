@@ -1,6 +1,7 @@
 {
   "version": 2,
   "rewrites": [
-    { "source": "/api/create", "destination": "/api/create.js" }
+    { "source": "/api/create", "destination": "/api/create.js" },
+    { "source": "/api/history", "destination": "/api/history.js" }
   ]
 }
