@@ -23,6 +23,9 @@
         .history-doc { font-size: 14px; font-weight: 700; color: #eef7ff; }
         .history-amount { font-size: 13px; font-weight: 700; color: #0f172a; background: #8de0ff; border-radius: 999px; padding: 3px 8px; }
         .history-date { margin-top: 5px; color: #9fb2c6; font-size: 12px; }
+        .history-actions { margin-top: 8px; display: flex; justify-content: flex-end; }
+        .history-print-btn { padding: 6px 10px; font-size: 12px; border-radius: 8px; border: 1px solid #2f8f4d; background: #163321; color: #b4f5c9; cursor: pointer; }
+        .history-print-btn:hover { background: #1e472d; }
         .history-empty { color: #8ea2b7; font-size: 13px; padding: 8px 2px; }
         
         /* עיצוב לקבלה התרמית - מוסתר במסך */
@@ -148,7 +151,7 @@
             <span id="r-total"></span>
         </div>
         <div class="receipt-line"></div>
-        <p class="receipt-center" style="font-size: 0.9em;">תודה שקניתם באספרסו ארט!</p>
+        <p class="receipt-center" style="font-size: 0.9em;">תודה שקניתם אצלינו<br>MOMENTO PRINT & GIFT</p>
     </div>
 
         <script>
@@ -157,6 +160,7 @@
         const status = document.getElementById('status');
         const historyPanel = document.getElementById('history-panel');
         const historyList = document.getElementById('history-list');
+        let currentHistoryItems = [];
 
         function num(n) {
             if (n === '.' && s.includes('.')) return;
@@ -189,6 +193,25 @@
             return `₪ ${Number(value).toFixed(2)}`;
         }
 
+        function extractDocIndex(result) {
+            const direct = result?.index;
+            if (typeof direct === 'number' && Number.isFinite(direct)) return String(direct);
+            if (typeof direct === 'string' && direct.trim()) return direct.trim();
+
+            const raw = result?.raw;
+            if (typeof raw === 'number' && Number.isFinite(raw)) return String(raw);
+            if (typeof raw === 'string' && raw.trim()) {
+                const asNumber = Number(raw);
+                return Number.isFinite(asNumber) ? String(asNumber) : raw.trim();
+            }
+            if (raw && typeof raw === 'object') {
+                const nested = raw.index;
+                if (typeof nested === 'number' && Number.isFinite(nested)) return String(nested);
+                if (typeof nested === 'string' && nested.trim()) return nested.trim();
+            }
+            return '-';
+        }
+
         function formatHistoryDate(dateValue) {
             if (!dateValue) return '-';
             const d = new Date(dateValue);
@@ -211,19 +234,48 @@
             localStorage.setItem('posHistory', JSON.stringify(history.slice(0, 200)));
         }
 
+        function fillReceiptAndPrint({ index, amount, docDate }) {
+            const numericAmount = Number(amount || 0);
+            const safeAmount = Number.isFinite(numericAmount) ? numericAmount : 0;
+            const vatRate = 0.18;
+            const subtotal = safeAmount / (1 + vatRate);
+            const vatAmount = safeAmount - subtotal;
+
+            document.getElementById('r-id').innerText = index || '-';
+            document.getElementById('r-date').innerText = formatHistoryDate(docDate || new Date().toISOString());
+            document.getElementById('r-subtotal').innerHTML = '<span class="receipt-amount">' + formatCurrency(subtotal) + '</span>';
+            document.getElementById('r-vat').innerHTML = '<span class="receipt-amount">' + formatCurrency(vatAmount) + '</span>';
+            document.getElementById('r-gross').innerHTML = '<span class="receipt-amount">' + formatCurrency(safeAmount) + '</span>';
+            document.getElementById('r-total').innerHTML = '<span class="receipt-amount">' + formatCurrency(safeAmount) + '</span>';
+
+            setTimeout(() => {
+                window.print();
+            }, 250);
+        }
+
+        function printFromHistory(index) {
+            const item = currentHistoryItems[index];
+            if (!item) return;
+            fillReceiptAndPrint(item);
+        }
+
         function renderHistoryItems(items, noteText) {
+            currentHistoryItems = items;
             if (!items || items.length === 0) {
                 historyList.innerHTML = '<div class="history-empty">לא נמצאו מסמכי POS בטווח שנבחר.</div>';
                 return;
             }
             const note = noteText ? `<div class="history-empty" style="margin-bottom:8px">${noteText}</div>` : '';
-            historyList.innerHTML = note + items.map((item) => `
+            historyList.innerHTML = note + items.map((item, idx) => `
                 <div class="history-item">
                     <div class="history-top">
                         <span class="history-doc">#${item.index || '-'}</span>
                         <span class="history-amount">${Number(item.amount || 0).toFixed(2)} ₪</span>
                     </div>
                     <div class="history-date">${formatHistoryDate(item.docDate)}</div>
+                    <div class="history-actions">
+                        <button class="history-print-btn" onclick="printFromHistory(${idx})">הדפס</button>
+                    </div>
                 </div>
             `).join('');
         }
@@ -285,32 +337,14 @@
                 }
 
                 if (r.ok && (data.resultCodeId === 101 || data.resultCodeId === 102)) {
-                    const rawResult = data?.result;
-                    const numericRaw = Number(rawResult);
-                    const numericNestedRaw = Number(rawResult?.raw);
-                    const docIndex = rawResult?.index
-                        || (Number.isFinite(numericRaw) ? numericRaw : null)
-                        || (Number.isFinite(numericNestedRaw) ? numericNestedRaw : null)
-                        || '-';
+                    const docIndex = extractDocIndex(data?.result);
                     const docDate = new Date().toISOString();
-                    const vatRate = 0.18;
-                    const subtotal = amount / (1 + vatRate);
-                    const vatAmount = amount - subtotal;
-
-                    document.getElementById('r-id').innerText = docIndex;
-                    document.getElementById('r-date').innerText = new Date(docDate).toLocaleString('he-IL');
-                    document.getElementById('r-subtotal').innerHTML = '<span class="receipt-amount">' + formatCurrency(subtotal) + '</span>';
-                    document.getElementById('r-vat').innerHTML = '<span class="receipt-amount">' + formatCurrency(vatAmount) + '</span>';
-                    document.getElementById('r-gross').innerHTML = '<span class="receipt-amount">' + formatCurrency(amount) + '</span>';
-                    document.getElementById('r-total').innerHTML = '<span class="receipt-amount">' + formatCurrency(amount) + '</span>';
-                    saveLocalHistory({ index: docIndex, amount: amount.toFixed(2), docDate });
+                    const historyItem = { index: docIndex, amount: amount.toFixed(2), docDate };
+                    saveLocalHistory(historyItem);
+                    fillReceiptAndPrint(historyItem);
 
                     status.innerHTML = '<b style="color:#22c55e">הצלחה, שולח להדפסה...</b>';
-
-                    setTimeout(() => {
-                        window.print();
-                        clr();
-                    }, 800);
+                    setTimeout(() => clr(), 900);
                 } else {
                     status.style.color = 'red';
                     const serverMessage = data.message || data.error || data.details?.message || ('תקלה בשרת (' + r.status + ')');
